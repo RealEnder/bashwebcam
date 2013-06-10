@@ -1,5 +1,5 @@
 #!/bin/bash
-# BASHWebCam v0.1, Alex Stanev <alex@stanev.org>
+# BASHWebCam v0.2, Alex Stanev <alex@stanev.org>
 # https://github.com/realender/bashwebcam
 # The source code is distributed under GPLv3 license
 
@@ -13,6 +13,8 @@ VPORT=8080
 VHOST="http://localhost:$VPORT/$(basename $RESP).ogv"
 PASS="changeme"
 # Configuration end
+SALT=$(head -c 64 /dev/urandom | sha512sum -b | head -c 128)
+PSALT=$(echo -n $SALT$(echo -n $PASS | sha512sum | head -c 128) | sha512sum | head -c 128)
 
 server_init() {
     if [[ -p $RESP ]]; then
@@ -49,18 +51,21 @@ EOF
 }
 
 server_index() {
-    read -r -d '' CONT <<'EOF'
+    server_return "$(cat <<EOF
 <!DOCTYPE html>
 
 <html>
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
     <title>BASHWebCam</title>
+    <script src="http://crypto-js.googlecode.com/svn/tags/3.1.2/build/rollups/sha512.js"></script>
     <script type="text/javascript">
+        var salt="$SALT";
         var url="";
         function doCommand(comm) {
+            var psalt = CryptoJS.SHA512(salt+CryptoJS.SHA512(document.getElementById("pass").value));
             var xhReq = new XMLHttpRequest();
-            xhReq.open("GET", "/"+comm+"="+document.getElementById("pass").value, false);
+            xhReq.open("GET", "/"+comm+"="+psalt, false);
             xhReq.send(null);
             if (xhReq.status == 200)
                 return xhReq.responseText;
@@ -72,6 +77,9 @@ server_index() {
             if (url == "") {
                 alert("Bad password");
                 return;
+            }
+            window.onbeforeunload = function() {
+                doCommand("stop");
             }
 
             setTimeout(function() {
@@ -85,9 +93,6 @@ server_index() {
             var bwc = document.getElementById("bwc");
             bwc.pause();
             bwc.src = "";
-        }
-        window.onbeforeunload = function() {
-            doCommand("stop");
         }
     </script>
 </head>
@@ -104,8 +109,7 @@ Password: <input id="pass" type="password" />
 </body>
 </html>
 EOF
-
-    server_return "$CONT"
+)"
 }
 
 stream_start() {
@@ -134,10 +138,10 @@ while true ; do
         "GET /")
             server_index
             ;;
-        "GET /start=$PASS")
+        "GET /start=$PSALT")
             stream_start
             ;;
-        "GET /stop=$PASS")
+        "GET /stop=$PSALT")
             stream_stop
             ;;
         *)
