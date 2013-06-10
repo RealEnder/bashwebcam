@@ -1,0 +1,149 @@
+#!/bin/bash
+# BASHWebCam v0.1, Alex Stanev <alex@stanev.org>
+# https://github.com/realender/bashwebcam
+# The source code is distributed under GPLv3 license
+
+# Configuration
+# FIFO name
+RESP=$(mktemp -u)
+# Ports
+PORT=9000
+VPORT=8080
+# Video host
+VHOST="http://localhost:$VPORT/$(basename $RESP).ogv"
+PASS="changeme"
+# Configuration end
+
+server_init() {
+    if [[ -p $RESP ]]; then
+        echo "bwc already runs wild!"
+        exit
+    fi
+    mkfifo $RESP
+    # cleanup fifo
+    trap "killall -q vlc;killall -q nc;rm -f $RESP;exit" EXIT
+    echo "bwc initialized"
+}
+
+server_404() {
+    cat >$RESP <<EOF
+HTTP/1.0 404 Not Found
+Content-Type: text/plain
+Server: bashwebcam/1.0
+
+404 Not Found
+EOF
+}
+
+server_return() {
+    cat >$RESP <<EOF
+HTTP/1.0 200 OK
+Cache-Control: no-cache
+Content-Type: text/html
+Server: bashwebcam/1.0
+Connection: Close
+Content-Length: ${#1}
+
+$1
+EOF
+}
+
+server_index() {
+    read -r -d '' CONT <<'EOF'
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <title>BASHWebCam</title>
+    <script type="text/javascript">
+        var url="";
+        function doCommand(comm) {
+            var xhReq = new XMLHttpRequest();
+            xhReq.open("GET", "/"+comm+"="+document.getElementById("pass").value, false);
+            xhReq.send(null);
+            if (xhReq.status == 200)
+                return xhReq.responseText;
+
+            return "";
+        }
+        function doStart() {
+            url = doCommand("start");
+            if (url == "") {
+                alert("Bad password");
+                return;
+            }
+
+            setTimeout(function() {
+                var bwc = document.getElementById("bwc");
+                bwc.src = url;
+                bwc.play();
+            }, (5000)); 
+        }
+        function doStop() {
+            doCommand("stop");
+            var bwc = document.getElementById("bwc");
+            bwc.pause();
+            bwc.src = "";
+        }
+        window.onbeforeunload = function() {
+            doCommand("stop");
+        }
+    </script>
+</head>
+
+<body>
+<h1>BASH WebCam view</h1>
+<video id="bwc" type='video/ogg; codecs="theora"' preload="none" autoplay="">
+Your browser does not support theora video.
+</video>
+<hr/>
+Password: <input id="pass" type="password" />
+<input type="button" onclick="doStart();" value="Start" />
+<input type="button" onclick="doStop();" value="Stop" />
+</body>
+</html>
+EOF
+
+    server_return "$CONT"
+}
+
+stream_start() {
+    if [ -z "$(pidof vlc)" ]; then
+        cvlc v4l2:// --sout="#transcode{vcodec=theo,vb=800,scale=0}:http{dst=:$VPORT/$(basename $RESP).ogv}" &
+    fi
+    server_return "$VHOST"
+}
+
+stream_stop() {
+    killall -q vlc
+    server_return "Stopping..."
+}
+
+# Here we start
+server_init
+
+while true ; do
+    ( cat $RESP ) | nc -l $PORT | (
+    REQ=`while read L && [ " " "<" "$L" ] ; do echo "$L" ; done`
+    echo "[`date '+%Y-%m-%d %H:%M:%S'`] $REQ" | head -1
+
+    URL="${REQ% HTTP/*}"
+
+    case "$URL" in
+        "GET /")
+            server_index
+            ;;
+        "GET /start=$PASS")
+            stream_start
+            ;;
+        "GET /stop=$PASS")
+            stream_stop
+            ;;
+        *)
+            server_404
+            ;;
+    esac
+    
+    )
+done
