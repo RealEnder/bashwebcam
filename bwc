@@ -1,24 +1,31 @@
 #!/bin/bash
-# BASHWebCam v0.2, Alex Stanev <alex@stanev.org>
+# BASHWebCam, Alex Stanev <alex@stanev.org>
+# A simple bash script, implementing HTTP web server and online video streaming with VLC
 # https://github.com/realender/bashwebcam
 # The source code is distributed under GPLv3 license
 
-# Configuration
-# FIFO name
-RESP=$(mktemp -u)
-# Ports
+# Configuration start
+# Web server port
 PORT=9000
+# VLC streaming port
 VPORT=8080
 # Video host
-VHOST="http://localhost:$VPORT/$(basename $RESP).ogv"
+VHOST="http://localhost"
+# Access password
 PASS="changeme"
 # Configuration end
+
+VERSION="0.2"
+# FIFO name
+RESP=$(mktemp -u)
 SALT=$(head -c 64 /dev/urandom | sha512sum -b | head -c 128)
 PSALT=$(echo -n $SALT$(echo -n $PASS | sha512sum | head -c 128) | sha512sum | head -c 128)
+VURL="$VHOST:$VPORT/$(basename $RESP).ogv"
+VPID=0
 
 server_init() {
     if [[ -p $RESP ]]; then
-        echo "bwc already runs wild!"
+        echo "bwc $VERSION already runs wild!"
         exit
     fi
     mkfifo $RESP
@@ -31,7 +38,7 @@ server_404() {
     cat >$RESP <<EOF
 HTTP/1.0 404 Not Found
 Content-Type: text/plain
-Server: bashwebcam/1.0
+Server: bashwebcam/$VERSION
 
 404 Not Found
 EOF
@@ -42,7 +49,7 @@ server_return() {
 HTTP/1.0 200 OK
 Cache-Control: no-cache
 Content-Type: text/html
-Server: bashwebcam/1.0
+Server: bashwebcam/$VERSION
 Connection: Close
 Content-Length: ${#1}
 
@@ -115,8 +122,9 @@ EOF
 stream_start() {
     if [ -z "$(pidof vlc)" ]; then
         cvlc v4l2:// --sout="#transcode{vcodec=theo,vb=800,scale=0}:http{dst=:$VPORT/$(basename $RESP).ogv}" &
+        export VPID=$!
     fi
-    server_return "$VHOST"
+    server_return "$VURL"
 }
 
 stream_stop() {
@@ -148,6 +156,5 @@ while true ; do
             server_404
             ;;
     esac
-    
     )
 done
