@@ -30,8 +30,8 @@ server_init() {
     fi
     mkfifo $RESP
     # cleanup fifo
-    trap "killall -q vlc;killall -q nc;rm -f $RESP;exit" EXIT
-    echo "bwc initialized"
+    trap "rm -f $RESP;kill 0" EXIT
+    echo "bwc $VERSION initialized"
 }
 
 server_404() {
@@ -120,23 +120,28 @@ EOF
 }
 
 stream_start() {
-    if [ -z "$(pidof vlc)" ]; then
+    if [ $VPID -eq 0 ]; then
         cvlc v4l2:// --sout="#transcode{vcodec=theo,vb=800,scale=0}:http{dst=:$VPORT/$(basename $RESP).ogv}" &
-        export VPID=$!
+        VPID=$!
     fi
     server_return "$VURL"
 }
 
 stream_stop() {
-    killall -q vlc
-    server_return "Stopping..."
+    if [ $VPID -ne 0 ]; then
+        kill $VPID
+        VPID=0
+        server_return "Stopping..."
+        return
+    fi
+    server_return "Not streaming yet"
 }
 
 # Here we start
 server_init
 
 while true ; do
-    ( cat $RESP ) | nc -l $PORT | (
+    {
     REQ=`while read L && [ " " "<" "$L" ] ; do echo "$L" ; done`
     echo "[`date '+%Y-%m-%d %H:%M:%S'`] $REQ" | head -1
 
@@ -156,5 +161,6 @@ while true ; do
             server_404
             ;;
     esac
-    )
+    echo "VPID=$VPID"
+    } < <(nc -l $PORT < <( cat $RESP ))
 done
