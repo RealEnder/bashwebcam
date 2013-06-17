@@ -162,6 +162,5 @@ while true ; do
             server_404
             ;;
     esac
-    echo "VPID=$VPID"
     } < <(nc -l $PORT < <( cat $RESP ))
 done
