@@ -102,16 +102,20 @@ server_index() {
             bwc.pause();
             bwc.src = "";
         }
+        function enterSubmit(e) {
+            if (e.keyCode==13)
+                doStart();
+        }
     </script>
 </head>
 
-<body>
+<body onload="document.getElementById('pass').focus();">
 <h1>BASH WebCam view</h1>
 <video id="bwc" type='video/ogg; codecs="theora"' preload="none" autoplay="">
 Your browser does not support theora video.
 </video>
 <hr/>
-Password: <input id="pass" type="password" />
+Password: <input id="pass" type="password" onkeypress="return enterSubmit(event);" />
 <input type="button" onclick="doStart();" value="Start" />
 <input type="button" onclick="doStop();" value="Stop" />
 </body>
