@@ -17,7 +17,7 @@ PASS="changeme"
 
 VERSION="0.2"
 # FIFO name
-RESP=$(mktemp -u)
+RESP=$(mktemp -u --tmpdir bwc.XXXXXXXXXX)
 VKEY=$(head -c 64 /dev/urandom | sha512sum -b | head -c 128)
 SALT=$(head -c 64 /dev/urandom | sha512sum -b | head -c 128)
 PSALT=$(echo -n $SALT$(echo -n $PASS | sha512sum | head -c 128) | sha512sum | head -c 128)
@@ -25,7 +25,7 @@ VURL="$VHOST:$VPORT/$VKEY.ogv"
 VPID=0
 
 server_init() {
-    if [[ -p $RESP ]]; then
+    if test -n "$(find $(dirname $RESP) -maxdepth 1 -name 'bwc.??????????' -print -quit)"; then
         echo "bwc $VERSION already runs wild!"
         exit
     fi
