@@ -39,7 +39,7 @@ server_404() {
     cat >$RESP <<EOF
 HTTP/1.0 404 Not Found
 Content-Type: text/plain
-Server: bashwebcam/$VERSION
+Server: bashwebcam/1.0
 
 404 Not Found
 EOF
@@ -50,7 +50,7 @@ server_return() {
 HTTP/1.0 200 OK
 Cache-Control: no-cache
 Content-Type: text/html
-Server: bashwebcam/$VERSION
+Server: bashwebcam/1.0
 Connection: Close
 Content-Length: ${#1}
 
