@@ -71,12 +71,20 @@ server_index() {
         var salt="$SALT";
         var url="";
         function doCommand(comm) {
-            var psalt = CryptoJS.SHA512(salt+CryptoJS.SHA512(document.getElementById("pass").value));
+            var passin = document.getElementById("pass").value;
+            var psalt;
+            if (passin.length == 128)
+                psalt = passin;
+            else
+                psalt = CryptoJS.SHA512(salt+CryptoJS.SHA512(document.getElementById("pass").value));
+
             var xhReq = new XMLHttpRequest();
             xhReq.open("GET", "/"+comm+"="+psalt, false);
             xhReq.send(null);
-            if (xhReq.status == 200)
+            if (xhReq.status == 200) {
+                document.getElementById("pass").value = psalt;
                 return xhReq.responseText;
+            }
 
             return "";
         }
